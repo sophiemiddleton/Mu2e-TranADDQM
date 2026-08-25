@@ -81,8 +81,10 @@ python filter_from_dqm.py
 
 ### Quick Setup
 
+Clone this repo and the ANLDQ code (ask for assistance if needed there). These should both be in the workingdir:
+
 ```bash
-cd /exp/mu2e/app/users/sophie/CrossExperimentalAIDQM
+cd /exp/mu2e/app/users/<user>/<working dir>
 pip install -e .
 ```
 
