@@ -4,10 +4,34 @@ A modular, production-ready pipeline for detecting anomalies in CRV (Cosmic Ray 
 
 ## Overview
 
-The pipeline processes filtered DQM (Data Quality Monitoring) datasets through six phases:
+The pipeline processes filtered DQM (Data Quality Monitoring) datasets through six phases. Before starting the pipeline, data must be exported from DQM and filtered.
+
+### Step 0: Data Export & Filtering (Pre-processing)
+
+This step extracts raw DQM metrics and removes uninformative features:
+
+#### 0a. Export DQM Metrics
+```bash
+python export_from_dqm.py
+```
+- Queries DQM database for CRV detector metrics
+- Creates `dqm_crv_anomaly_dataset_004-000.csv` (raw data with all features)
+- Runs DQM queries in isolated subprocesses to prevent C++ segfaults
+- Returns run, subrun, timestamp, and all registered CRV metrics
+
+#### 0b. Filter Static Columns
+```bash
+python filter_from_dqm.py
+```
+- Removes uninformative columns (constant values, all 1.0, etc.)
+- Creates `dqm_crv_anomaly_dataset_004-000_filtered.csv` (clean input for pipeline)
+- Preserves metadata columns (run, subrun, timestamp)
+- Keeps only features with actual variance
+
+**Output**: `dqm_crv_anomaly_dataset_004-000_filtered.csv` → Ready for Phase 1 (Ingestion)
 
 ### Phase 1: Ingestion
-- Load pre-filtered CSV dataset (`dqm_crv_anomaly_dataset_*_filtered.csv`)
+- Load filtered CSV from Step 0b (`dqm_crv_anomaly_dataset_*_filtered.csv`)
 - Parse and validate ISO 8601 timestamps (handles timezone info)
 - Perform data quality checks (missing values, data types, etc.)
 
@@ -75,7 +99,21 @@ pip install torch  # Optional, for TranAD
 
 ## Usage
 
-### Command Line (Simplest)
+### Complete Workflow (Step 0 → Phases 1-6)
+
+```bash
+# Step 0a: Extract DQM metrics from database
+cd dqm_pipeline
+python export_from_dqm.py
+
+# Step 0b: Filter out static/uninformative columns
+python filter_from_dqm.py
+
+# Phase 1-6: Run anomaly detection pipeline on filtered data
+python -m dqm_pipeline --csv dqm_crv_anomaly_dataset_004-000_filtered.csv
+```
+
+### Command Line (Simplest - Phase 1-6 only)
 
 Run with default parameters and visualization:
 ```bash
@@ -255,6 +293,8 @@ run, subrun, timestamp, CRV_crvPEsMPV_CRVsector0_LeftEdge, CRV_crvPEsMPV_CRVsect
 dqm_pipeline/
 ├── __init__.py              # Package initialization
 ├── __main__.py              # CLI entry point (python -m dqm_pipeline)
+├── export_from_dqm.py       # Step 0a: Extract DQM metrics from database
+├── filter_from_dqm.py       # Step 0b: Filter static/uninformative columns
 ├── run_pipeline.py          # Master orchestrator & CLI interface
 ├── ingestion.py             # Phase 1: Data loading & validation
 ├── preprocessing.py         # Phase 2: Feature scaling & selection
@@ -281,6 +321,19 @@ dqm_pipeline/
 - **Scalability**: Tested up to 1000+ records; design supports larger datasets
 
 ## Examples
+
+### Example 0: Full Workflow (Export → Filter → Detect)
+```bash
+cd dqm_pipeline
+# Export metrics from DQM database
+python export_from_dqm.py
+
+# Filter static columns
+python filter_from_dqm.py
+
+# Run pipeline on filtered data
+python -m dqm_pipeline --csv dqm_crv_anomaly_dataset_004-000_filtered.csv
+```
 
 ### Example 1: Basic Pipeline (Recommended for Anomaly Detection)
 ```bash
