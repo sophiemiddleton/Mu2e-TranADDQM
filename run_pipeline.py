@@ -71,17 +71,19 @@ def main(csv_path: str,
          iqr_multiplier: float = 1.5,
          voting_threshold: float = 2.0,
          threshold_percentile: float = 95,
-         generate_plots: bool = True) -> None:
+         generate_plots: bool = True,
+         apply_iqr_filtering: bool = False) -> None:
     """
     Run complete pipeline.
     
     Args:
         csv_path: Path to filtered CSV
         output_dir: Directory for output reports
-        iqr_multiplier: IQR multiplier for outlier detection
+        iqr_multiplier: IQR multiplier for outlier detection (only used if apply_iqr_filtering=True)
         voting_threshold: Voting threshold for ensemble
         threshold_percentile: TranAD threshold percentile (default: 95)
         generate_plots: Whether to generate visualization plots
+        apply_iqr_filtering: Whether to apply IQR-based outlier removal (default: False to preserve anomalies)
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -111,7 +113,7 @@ def main(csv_path: str,
     print("\n[PHASE 2] PREPROCESSING")
     print("-" * 70)
     df_clean, active_features, X_scaled, scaler = preprocessing.preprocess_pipeline(
-        df, feature_cols, iqr_multiplier=iqr_multiplier
+        df, feature_cols, iqr_multiplier=iqr_multiplier, apply_iqr_filtering=apply_iqr_filtering
     )
     
     # =========================================================================
@@ -241,6 +243,11 @@ Examples:
         help="TranAD threshold percentile (default: 95, try 90 or 97 to adjust sensitivity)"
     )
     parser.add_argument(
+        "--apply-iqr",
+        action="store_true",
+        help="Apply IQR-based outlier filtering in preprocessing (default: False to preserve anomalies)"
+    )
+    parser.add_argument(
         "--plots",
         action="store_true",
         default=True,
@@ -262,7 +269,8 @@ Examples:
             iqr_multiplier=args.iqr,
             voting_threshold=args.voting_threshold,
             threshold_percentile=args.threshold_percentile,
-            generate_plots=generate_plots
+            generate_plots=generate_plots,
+            apply_iqr_filtering=args.apply_iqr
         )
     except Exception as e:
         print(f"\n✗ Error: {e}", file=sys.stderr)

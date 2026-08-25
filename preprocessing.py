@@ -156,14 +156,17 @@ def create_sliding_windows(X: np.ndarray, window_size: int, stride: int = 1) -> 
 
 def preprocess_pipeline(df: pd.DataFrame, 
                        feature_cols: List[str],
-                       iqr_multiplier: float = 1.5) -> Tuple[pd.DataFrame, List[str], np.ndarray, StandardScaler]:
+                       iqr_multiplier: float = 1.5,
+                       apply_iqr_filtering: bool = False) -> Tuple[pd.DataFrame, List[str], np.ndarray, StandardScaler]:
     """
-    Complete preprocessing pipeline: feature selection -> outlier removal -> scaling.
+    Complete preprocessing pipeline: feature selection -> (optional outlier removal) -> scaling.
     
     Args:
         df: Input DataFrame
         feature_cols: List of feature column names
-        iqr_multiplier: IQR multiplier for outlier filtering
+        iqr_multiplier: IQR multiplier for outlier filtering (if enabled)
+        apply_iqr_filtering: Whether to apply IQR-based outlier removal (default: False)
+                           Set to True only for training data cleanup, not for anomaly detection
         
     Returns:
         Tuple of (cleaned_df, active_features, scaled_matrix, scaler)
@@ -171,8 +174,14 @@ def preprocess_pipeline(df: pd.DataFrame,
     # Step 1: Feature selection
     active_features = identify_active_features(df, feature_cols)
     
-    # Step 2: Outlier filtering
-    df_clean, filter_stats = apply_iqr_outlier_filtering(df, active_features, iqr_multiplier)
+    # Step 2: Optional outlier filtering (disabled by default to preserve anomalies)
+    if apply_iqr_filtering:
+        df_clean, filter_stats = apply_iqr_outlier_filtering(df, active_features, iqr_multiplier)
+    else:
+        df_clean = df.copy()
+        print(f"\nIQR Outlier Filtering:")
+        print(f"  Status: DISABLED (to preserve potential anomalies)")
+        print(f"  Records preserved: {len(df_clean)}")
     
     # Step 3: Extract and scale features
     X_raw = df_clean[active_features].values
