@@ -180,6 +180,7 @@ class DQMVisualizer:
                                        detector_name='Ensemble', threshold=None):
         """
         Plot anomaly scores over time with identified anomalies highlighted.
+        Creates both full-range and zoomed (0-5) versions.
         
         Args:
             df: DataFrame with datetime column
@@ -188,49 +189,58 @@ class DQMVisualizer:
             detector_name: Name of detector for title
             threshold: Optional threshold line to display
         """
-        fig, ax = plt.subplots(figsize=self.figsize)
-        
         if 'datetime' not in df.columns and 'timestamp' in df.columns:
             df = df.copy()
             df['datetime'] = pd.to_datetime(df['timestamp'], utc=True).dt.tz_localize(None)
         
         datetime_axis = df['datetime']
-        
-        # Plot normal records
         normal_mask = anomaly_predictions == 0
         anomaly_mask = anomaly_predictions == 1
         
-        ax.scatter(datetime_axis[normal_mask], anomaly_scores[normal_mask],
-                  marker='o', s=30, alpha=0.5, color='blue', label='Normal')
+        # Helper to create the plot
+        def create_plot(ax, title_suffix=''):
+            ax.scatter(datetime_axis[normal_mask], anomaly_scores[normal_mask],
+                      marker='o', s=30, alpha=0.5, color='blue', label='Normal')
+            
+            if anomaly_mask.sum() > 0:
+                ax.scatter(datetime_axis[anomaly_mask], anomaly_scores[anomaly_mask],
+                          marker='X', s=150, alpha=0.9, color='red', label='Anomaly', zorder=5)
+            
+            if threshold is not None:
+                ax.axhline(y=threshold, color='red', linestyle='--', linewidth=2, 
+                          label=f'Threshold ({threshold:.3f})', alpha=0.7)
+            else:
+                threshold_ref = np.percentile(anomaly_scores, 95)
+                ax.axhline(y=threshold_ref, color='orange', linestyle='--', linewidth=1.5, 
+                          label=f'95th percentile ({threshold_ref:.3f})', alpha=0.5)
+            
+            ax.set_xlabel('Timestamp')
+            ax.set_ylabel('Anomaly Score')
+            ax.set_title(f'{detector_name} - Anomaly Scores{title_suffix}', fontweight='bold')
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d %H:%M'))
+            ax.grid(True, alpha=0.3)
+            ax.legend(loc='upper left')
+            plt.xticks(rotation=45)
         
-        # Plot anomalies with different marker
-        if anomaly_mask.sum() > 0:
-            ax.scatter(datetime_axis[anomaly_mask], anomaly_scores[anomaly_mask],
-                      marker='X', s=150, alpha=0.9, color='red', label='Anomaly', zorder=5)
-        
-        # Add threshold line if provided
-        if threshold is not None:
-            ax.axhline(y=threshold, color='red', linestyle='--', linewidth=2, 
-                      label=f'Threshold ({threshold:.3f})', alpha=0.7)
-        else:
-            # Use 95th percentile as reference
-            threshold = np.percentile(anomaly_scores, 95)
-            ax.axhline(y=threshold, color='orange', linestyle='--', linewidth=1.5, 
-                      label=f'95th percentile ({threshold:.3f})', alpha=0.5)
-        
-        ax.set_xlabel('Timestamp')
-        ax.set_ylabel('Anomaly Score')
-        ax.set_title(f'{detector_name} - Anomaly Scores with Detected Anomalies', 
-                    fontweight='bold')
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d %H:%M'))
-        ax.grid(True, alpha=0.3)
-        ax.legend(loc='upper left')
-        plt.xticks(rotation=45)
-        
+        # Full-range plot
+        fig, ax = plt.subplots(figsize=self.figsize)
+        create_plot(ax, ' (Full Range)')
         plt.tight_layout()
-        plt.savefig(self.output_dir / f'{detector_name.lower()}_scores_highlighted.png', 
-                   dpi=self.dpi, bbox_inches='tight')
-        print(f"✓ Saved: {detector_name.lower()}_scores_highlighted.png")
+        
+        out_path = f'{self.output_dir}/{detector_name.lower()}_anomaly_scores_full.png'
+        plt.savefig(out_path, dpi=100, bbox_inches='tight')
+        print(f"  ✓ {out_path}")
+        plt.close()
+        
+        # Zoomed plot (-0.5 to 5 range to see detail near threshold)
+        fig, ax = plt.subplots(figsize=self.figsize)
+        create_plot(ax, ' (Zoomed -0.5 to 5)')
+        ax.set_ylim(-0.5, 5)
+        plt.tight_layout()
+        
+        out_path_zoom = f'{self.output_dir}/{detector_name.lower()}_anomaly_scores_zoomed.png'
+        plt.savefig(out_path_zoom, dpi=100, bbox_inches='tight')
+        print(f"  ✓ {out_path_zoom}")
         plt.close()
     
     def plot_detector_comparison(self, df, z_score_scores, pca_scores, tranad_scores):
@@ -604,7 +614,7 @@ class DQMVisualizer:
     
     def generate_all_plots(self, df, feature_cols, z_score_scores, pca_scores, 
                           tranad_scores, anomaly_col='anomaly', 
-                          tranad_losses=None, anomaly_predictions=None):
+                          tranad_losses=None, anomaly_predictions=None, model_results=None):
         """
         Generate all visualization plots (except training curve, which is handled separately).
         
@@ -635,7 +645,15 @@ class DQMVisualizer:
             self.plot_anomaly_scores_highlighted(df, pca_scores, anomaly_predictions,
                                                 detector_name='PCA', threshold=pca_threshold)
             
-            tranad_threshold = np.percentile(tranad_scores, 95)
+            # Use actual threshold from TranAD model if available
+            tranad_threshold = None
+            if model_results and 'tranad_threshold' in model_results:
+                tranad_threshold = model_results['tranad_threshold']
+                print(f"  Using TranAD threshold from model: {tranad_threshold:.8f}")
+            else:
+                tranad_threshold = np.percentile(tranad_scores, 95)
+                print(f"  Using 95th percentile as threshold: {tranad_threshold:.8f}")
+            
             self.plot_anomaly_scores_highlighted(df, tranad_scores, anomaly_predictions,
                                                 detector_name='TranAD', threshold=tranad_threshold)
             

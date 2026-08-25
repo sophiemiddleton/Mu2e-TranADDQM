@@ -134,7 +134,8 @@ def run_ensemble_detection(X: np.ndarray,
                           df: pd.DataFrame,
                           active_features: List[str],
                           voting_threshold: float = 2.0,
-                          include_tranad: bool = True) -> Tuple[np.ndarray, Dict]:
+                          include_tranad: bool = True,
+                          threshold_percentile: float = 95) -> Tuple[np.ndarray, Dict]:
     """
     Run ensemble of Z-Score, PCA, and TranAD detectors.
     
@@ -144,6 +145,7 @@ def run_ensemble_detection(X: np.ndarray,
         active_features: List of feature names
         voting_threshold: Detectors >= this value → anomaly
         include_tranad: Whether to include TranAD in ensemble
+        threshold_percentile: TranAD threshold percentile (default: 95)
         
     Returns:
         Tuple of (ensemble_predictions, results_dict)
@@ -169,6 +171,7 @@ def run_ensemble_detection(X: np.ndarray,
     tranad_scores = np.zeros_like(z_scores)
     tranad_losses = []
     tranad_batch_losses = []
+    tranad_threshold = None
     
     if include_tranad and TRANAD_ANL_AVAILABLE:
         try:
@@ -182,12 +185,15 @@ def run_ensemble_detection(X: np.ndarray,
                 learning_rate=0.001,
                 epochs=50,
                 contamination=0.05,
+                threshold_percentile=threshold_percentile,
                 train_ratio=0.3
             )
             tranad_detector.fit(X)
             tranad_pred = tranad_detector.predict(X)
             tranad_scores = tranad_detector.anomaly_scores(X)
             tranad_losses = tranad_detector.training_losses
+            tranad_threshold = tranad_detector.threshold  # Capture actual threshold
+            print(f"  TranAD threshold captured: {tranad_threshold:.8f}")
         except Exception as e:
             print(f"⚠️  TranAD training failed: {e}")
             tranad_pred = np.zeros_like(z_pred)
@@ -227,9 +233,13 @@ def run_ensemble_detection(X: np.ndarray,
         'tranad_predictions': tranad_pred,
         'tranad_scores': tranad_scores,
         'tranad_losses': tranad_losses,
+        'tranad_threshold': tranad_threshold,  # Add actual threshold
         'voting_scores': votes,
         'n_anomalies': n_anomalies,
         'anomaly_rate': anomaly_rate,
     }
+    
+    if tranad_threshold is not None:
+        print(f"\nThreshold stored in results: {tranad_threshold:.8f}")
     
     return ensemble_pred, results

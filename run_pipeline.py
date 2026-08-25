@@ -58,7 +58,6 @@ def create_report(df: pd.DataFrame,
     if len(anomalies_df) > 0:
         print(f"\nAnomalies ({len(anomalies_df)} records):")
         print("-" * 70)
-        print(anomalies_df[['run', 'subrun', 'datetime', 'anomaly', 'voting_score']].head(10))
         
         anomaly_path = output_path.replace('.csv', '_anomalies_only.csv')
         anomalies_df.to_csv(anomaly_path, index=False)
@@ -71,6 +70,7 @@ def main(csv_path: str,
          output_dir: str = "./results",
          iqr_multiplier: float = 1.5,
          voting_threshold: float = 2.0,
+         threshold_percentile: float = 95,
          generate_plots: bool = True) -> None:
     """
     Run complete pipeline.
@@ -80,6 +80,7 @@ def main(csv_path: str,
         output_dir: Directory for output reports
         iqr_multiplier: IQR multiplier for outlier detection
         voting_threshold: Voting threshold for ensemble
+        threshold_percentile: TranAD threshold percentile (default: 95)
         generate_plots: Whether to generate visualization plots
     """
     output_dir = Path(output_dir)
@@ -119,7 +120,8 @@ def main(csv_path: str,
     print("\n[PHASE 3] ANOMALY DETECTION")
     print("-" * 70)
     anomaly_pred, model_results = models.run_ensemble_detection(
-        X_scaled, df_clean, active_features, voting_threshold=voting_threshold
+        X_scaled, df_clean, active_features, voting_threshold=voting_threshold,
+        threshold_percentile=threshold_percentile
     )
     
     # =========================================================================
@@ -173,7 +175,8 @@ def main(csv_path: str,
             model_results['tranad_scores'],
             anomaly_col='anomaly',
             tranad_losses=None,  # Already plotted above
-            anomaly_predictions=model_results['tranad_predictions']
+            anomaly_predictions=model_results['tranad_predictions'],
+            model_results=model_results  # Pass model results to use actual thresholds
         )
     
     # =========================================================================
@@ -232,6 +235,12 @@ Examples:
         help="Voting threshold for ensemble (default: 2.0)"
     )
     parser.add_argument(
+        "--threshold-percentile",
+        type=float,
+        default=95,
+        help="TranAD threshold percentile (default: 95, try 90 or 97 to adjust sensitivity)"
+    )
+    parser.add_argument(
         "--plots",
         action="store_true",
         default=True,
@@ -252,6 +261,7 @@ Examples:
             output_dir=args.output,
             iqr_multiplier=args.iqr,
             voting_threshold=args.voting_threshold,
+            threshold_percentile=args.threshold_percentile,
             generate_plots=generate_plots
         )
     except Exception as e:

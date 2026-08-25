@@ -51,7 +51,8 @@ class TranADDetector:
     """
     
     def __init__(self, n_window=4, d_model=32, nhead=4, d_ff=64, num_layers=2,
-                 learning_rate=0.001, epochs=50, contamination=0.05, 
+                 learning_rate=0.001, epochs=50, contamination=0.05,
+                 threshold_percentile=95,
                  train_ratio=0.3, device=None):
         """
         Args:
@@ -62,7 +63,8 @@ class TranADDetector:
             num_layers: Number of transformer layers
             learning_rate: Adam learning rate
             epochs: Training epochs
-            contamination: Expected anomaly ratio
+            contamination: Expected anomaly ratio (kept for compatibility)
+            threshold_percentile: Percentile for threshold calculation (default: 95)
             train_ratio: Fraction of data for training baseline
             device: 'cpu' or 'cuda' (auto-detect if None)
         """
@@ -77,6 +79,7 @@ class TranADDetector:
         self.learning_rate = learning_rate
         self.epochs = epochs
         self.contamination = contamination
+        self.threshold_percentile = threshold_percentile
         self.train_ratio = train_ratio
         self.device = device or torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
@@ -173,11 +176,11 @@ class TranADDetector:
         
         self.reconstruction_errors = reconstruction_errors
         
-        # Set threshold from training period (95th percentile of train errors)
+        # Set threshold from training period (percentile-based approach)
         train_errors = reconstruction_errors[:n_train - self.n_window]
-        self.threshold = np.percentile(train_errors, 100 * (1 - self.contamination))
+        self.threshold = np.percentile(train_errors, self.threshold_percentile)
         
-        print(f"✓ Threshold (95th percentile of train errors): {self.threshold:.8f}")
+        print(f"✓ Threshold ({self.threshold_percentile}th percentile): {self.threshold:.8f}")
         
         return self
     
